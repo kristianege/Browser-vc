@@ -2,9 +2,9 @@
 
 This is a complete, local version control system that runs entirely within the web browser via a single HTML file.
 
-The system is designed for teams or individuals who need version control functionality (similar to Git) but work on **shared network drives** or in restricted environments where installing software is not possible.
+The system is designed for teams or individuals who need version control functionality (inspired by Git) but work on **shared network drives** or in restricted environments where installing software is not possible.
 
-It requires **no installation**, no server, and no database setup. It operates exclusively using the `FileSystem Access API` available in modern browsers (Chrome, Edge, Opera).
+It requires **no installation**, no server, and no database setup. It operates exclusively using the `FileSystem Access API` available in modern browsers.
 
 ## Key Features
 
@@ -20,15 +20,15 @@ It requires **no installation**, no server, and no database setup. It operates e
 
 1.  Download the `index.html` file.
 2.  Place the file in the root of the folder you wish to version control.
-3.  Double-click the file to open it in a compatible browser (Google Chrome or Microsoft Edge).
+3.  Double-click the file to open it in a compatible browser as Chrome or Vivaldi.
 4.  Click the **Select Project Folder** button and grant read/write permission to the directory.
 5.  You are now ready to track changes and take snapshots.
 
 ## AI Generation Notice
 
-**This project is 100% AI-generated.**
+**This project code was 99% AI-generated.**
 
-The code was developed through an iterative dialogue with **Google Gemini**. The functionality evolved from a basic backup tool into a full-featured version control system with differential analysis and collision safety, based on specific user requirements for a serverless environment.
+The code was developed through an iterative dialogue with **Google Gemini**. 
 
 * **Language:** HTML5, CSS3, Vanilla JavaScript.
 * **Dependencies:** None (No external libraries or CDNs).
