@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Version Control</title>
+    <style>
+        :root {
+            --bg: #1e1e1e; --panel: #252526; --text: #d4d4d4;
+            --accent: #5c87a8; --accent-light: #9cdcfe;
+            --success: #4ec9b0; --mod: #569cd6; --del: #ce9178;
+            --warn: #eebb00; --danger: #f14c4c; --border: #3e3e42;
+            --modal-bg: rgba(0,0,0,0.85);
+            --diff-add-bg: #1e3a2f; --diff-add-fg: #4ec9b0;
+            --diff-rem-bg: #3e2e2e; --diff-rem-fg: #ce9178;
+        }
+        body { font-family: "Cambria", serif; background: var(--bg); color: var(--text); padding: 40px; max-width: 1100px; margin: auto; line-height: 1.6; }
+        h2, h3 { font-weight: normal; color: var(--accent-light); margin-bottom: 15px; }
+        .panel { background: var(--panel); border: 1px solid var(--border); padding: 25px; margin-bottom: 30px; border-radius: 4px; box-shadow: 0 4px 6px rgba(0,0,0,0.2); }
+        .controls { display: flex; gap: 15px; margin-bottom: 20px; align-items: center; flex-wrap: wrap; }
+        input { background: #3c3c3c; border: 1px solid var(--border); color: #f0f0f0; padding: 10px; border-radius: 2px; outline: none; }
+        button { cursor: pointer; padding: 8px 16px; border: 1px solid var(--border); background: #333; color: #f0f0f0; transition: all 0.2s; font-variant-emoji: text; }
+        button:hover { background: #444; border-color: var(--accent); }
+        button:disabled { opacity: 0.4; cursor: not-allowed; }
+        .btn-primary { border-color: var(--accent); color: var(--accent-light); }
+        .btn-snapshot { background: var(--accent); color: #fff; border: none; font-weight: bold; }
+        .btn-snapshot:hover { background: #6a9bc2; }
+        .btn-gc { border-color: var(--warn); color: var(--warn); }
+        .btn-delete { color: var(--del); border-color: var(--del); margin-left: 10px; font-size: 1.1em; }
+        .btn-delete:hover { background: var(--danger); color: white; }
+        .btn-icon { padding: 4px 10px; font-size: 1.1em; margin-left: 5px; line-height: 1; }
+        .reset-link { font-size: 0.85em; color: #888; text-decoration: underline; cursor: pointer; margin-left: 10px; display: none; }
+        .ignore-box { border-left: 3px solid var(--border); padding-left: 15px; margin: 20px 0; font-size: 0.9em; color: #888; }
+        #changeLog { font-family: "Consolas", monospace; font-size: 0.9em; margin: 15px 0; min-height: 20px; padding: 10px; background: #1e1e1e; }
+        .file-new { color: var(--success); } .file-mod { color: var(--mod); } .file-del { color: var(--del); } .diff-size { color: #888; font-size: 0.85em; margin-left: 10px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 0.9em; }
+        th { text-align: left; padding: 12px; border-bottom: 2px solid var(--border); color: var(--accent-light); }
+        td { padding: 12px; border-bottom: 1px solid var(--border); color: #ccc; }
+        .snapshot-row:hover { background: #2a2a2a; cursor: pointer; }
+        .details-row { background: #1a1a1a; display: none; }
+        .file-list { padding: 10px 20px; display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 10px; }
+        .file-item { display: flex; justify-content: space-between; align-items: center; background: #252526; padding: 8px; border: 1px solid #333; }
+        .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: var(--modal-bg); }
+        .modal-content { background-color: var(--panel); margin: 5% auto; padding: 20px; border: 1px solid var(--border); width: 80%; max-height: 80vh; display: flex; flex-direction: column; }
+        pre { background: #1e1e1e; padding: 15px; overflow: auto; flex-grow: 1; color: #d4d4d4; font-family: monospace; border: 1px solid #333; }
+        .status-msg { font-style: italic; font-size: 0.85em; color: #666; margin-top: -10px; margin-bottom: 20px;}
+        
+        /* Diff specific styles */
+        .diff-add { background-color: var(--diff-add-bg); color: var(--diff-add-fg); display: block; width: 100%; }
+        .diff-rem { background-color: var(--diff-rem-bg); color: var(--diff-rem-fg); display: block; width: 100%; text-decoration: line-through; opacity: 0.8; }
+        .diff-nop { opacity: 0.5; }
+    </style>
+</head>
+<body>
+    <h2>Version Control</h2>
+    <p class="status-msg" id="statusInfo">Initializing...</p>
+    
+    <div class="panel">
+        <div class="controls">
+            <button id="btnInit" class="btn-primary">Select Project Folder</button>
+            <span id="resetFolder" class="reset-link">Change folder</span>
+            <input type="text" id="userName" placeholder="Your Name" style="width: 140px;">
+        </div>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 15px;">
+            <div class="ignore-box" style="margin: 0; flex-grow: 1;">
+                <strong>Ignore Patterns:</strong> 
+                <input type="text" id="ignoreInput" placeholder="*.csv, *.log, data.tmp" style="width: 60%; margin-left: 10px; background: transparent; border: none; border-bottom: 1px solid #555; color: #aaa;">
+            </div>
+            <button id="btnGC" class="btn-gc">🧹 Prune Storage</button>
+        </div>
+    </div>
+
+    <div class="panel">
+        <h3>Working Status</h3>
+        <button id="btnRefreshStatus">Scan for Changes</button>
+        <div id="changeLog">Awaiting scan...</div>
+        <div class="controls" style="margin-top: 25px;">
+            <input type="text" id="commitMsg" placeholder="Describe your changes... (Ctrl+Enter)" style="flex-grow: 1;">
+            <button id="btnSnapshot" disabled class="btn-snapshot">Take Snapshot</button>
+        </div>
+    </div>
+
+    <div class="panel">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+            <h3>History Timeline</h3>
+            <input type="text" id="searchInput" placeholder="Search..." style="width: 250px; padding: 6px;">
+        </div>
+        <table id="historyTable"><thead><tr><th>Time</th><th>User</th><th>Message</th><th>Action</th></tr></thead><tbody id="historyBody"></tbody></table>
+    </div>
+
+    <div id="fileModal" class="modal"><div class="modal-content"><div class="modal-header" style="display:flex;justify-content:space-between;"><h3 id="modalTitle" style="margin:0">Content</h3><span class="close-modal" style="cursor:pointer;font-size:28px;">&times;</span></div><pre id="modalCode"></pre></div></div>
+
+    <script>
+        let dirHandle;
+        let db = { history: [], lastUser: "", ignoreRules: "*.tmp, *.log" };
+        
+        const el = {
+            btnInit: document.getElementById('btnInit'), resetFolder: document.getElementById('resetFolder'),
+            btnSnapshot: document.getElementById('btnSnapshot'), btnRefreshStatus: document.getElementById('btnRefreshStatus'),
+            btnGC: document.getElementById('btnGC'), ignoreInput: document.getElementById('ignoreInput'),
+            changeLog: document.getElementById('changeLog'), historyBody: document.getElementById('historyBody'),
+            commitMsg: document.getElementById('commitMsg'), userName: document.getElementById('userName'),
+            statusInfo: document.getElementById('statusInfo'), searchInput: document.getElementById('searchInput'),
+            modal: document.getElementById('fileModal'), modalTitle: document.getElementById('modalTitle'),
+            modalCode: document.getElementById('modalCode'), closeModal: document.querySelector('.close-modal')
+        };
+        const DB_NAME = 'VersionControlDiffDB', STORE_NAME = 'settings';
+
+        function openDB() { return new Promise((res, rej) => { const req = indexedDB.open(DB_NAME, 1); req.onupgradeneeded = e => { const d = e.target.result; if (!d.objectStoreNames.contains(STORE_NAME)) d.createObjectStore(STORE_NAME); }; req.onsuccess = e => res(e.target.result); req.onerror = e => rej(e.target.error); }); }
+        async function saveHandle(h) { const d = await openDB(); const tx = d.transaction(STORE_NAME, 'readwrite'); tx.objectStore(STORE_NAME).put(h, 'projectHandle'); }
+        async function getSavedHandle() { const d = await openDB(); return new Promise(res => { const tx = d.transaction(STORE_NAME, 'readonly'); const r = tx.objectStore(STORE_NAME).get('projectHandle'); r.onsuccess = () => res(r.result); r.onerror = () => res(null); }); }
+        async function verifyPerm(h) { if ((await h.queryPermission({mode:'readwrite'}))==='granted') return true; return (await h.requestPermission({mode:'readwrite'}))==='granted'; }
+
+        window.onload = async () => { const saved = await getSavedHandle(); if (saved) { el.btnInit.textContent = `Reopen: ${saved.name}`; el.resetFolder.style.display = "inline"; el.btnInit.onclick = async () => { if (await verifyPerm(saved)) { dirHandle = saved; await initApp(); } }; } else setupFreshInit(); };
+        el.resetFolder.onclick = () => { setupFreshInit(); el.btnInit.click(); };
+        function setupFreshInit() { el.btnInit.textContent = "Select Project Folder"; el.resetFolder.style.display = "none"; el.btnInit.onclick = async () => { try { dirHandle = await window.showDirectoryPicker({mode:'readwrite'}); await saveHandle(dirHandle); await initApp(); } catch(e) {} }; }
+
+        async function initApp() { await loadMeta(); if (db.lastUser) el.userName.value = db.lastUser; if (db.ignoreRules) el.ignoreInput.value = db.ignoreRules; refreshUI(); el.statusInfo.innerText = `Connected: ${dirHandle.name}`; await scanStatus(); }
+        function shouldIgnore(name) { const rules = el.ignoreInput.value.split(',').map(r => r.trim()).filter(r => r !== ""); rules.push(".version_repo", "v-system-visual-diff.html"); return rules.some(r => r.startsWith('*.') ? name.endsWith(r.slice(1)) : name === r); }
+        el.ignoreInput.onchange = async () => { if (dirHandle) { await saveMeta(); await scanStatus(); } };
+        el.searchInput.oninput = () => { refreshUI(); };
+        el.commitMsg.addEventListener('keydown', (e) => { if (e.ctrlKey && e.key === 'Enter' && !el.btnSnapshot.disabled) el.btnSnapshot.click(); });
+
+        async function loadMeta() {
+            try {
+                const r = await dirHandle.getDirectoryHandle('.version_repo', {create:true});
+                const f = await r.getFileHandle('metadata.json', {create:true});
+                const t = await (await f.getFile()).text();
+                db = JSON.parse(t);
+                if (!db.history) db.history = [];
+            } catch(e) { db = { history: [], lastUser: "", ignoreRules: "*.tmp" }; }
+        }
+
+        async function getHash(file) { const buf = await file.arrayBuffer(); const hash = await crypto.subtle.digest('SHA-256', buf); return Array.from(new Uint8Array(hash)).map(b=>b.toString(16).padStart(2,'0')).join('').substring(0,12); }
+        function formatBytes(bytes) { if(bytes===0)return'0 B'; const i=Math.floor(Math.log(bytes)/Math.log(1024)); return parseFloat((bytes/Math.pow(1024,i)).toFixed(1))+' '+['B','KB','MB'][i]; }
+
+        async function scanStatus() {
+            if (!dirHandle) return;
+            el.changeLog.innerText = "Scanning...";
+            const curFiles = new Map(); let hasChanges = false;
+            for await (const entry of dirHandle.values()) { if (entry.kind === 'file' && !shouldIgnore(entry.name)) { const f = await entry.getFile(); curFiles.set(entry.name, { hash: await getHash(f), size: f.size }); } }
+            const lastSnap = db.history.length > 0 ? db.history[0] : null;
+            const lastFiles = lastSnap ? new Map(lastSnap.files.map(f => [f.name, { hash: f.hash, size: f.size || 0 }])) : new Map();
+            let html = "";
+            
+            curFiles.forEach((info, n) => {
+                const last = lastFiles.get(n);
+                if (!last) { html += `<div class="file-new">[NEW] ${n} <span class="diff-size">(+${formatBytes(info.size)})</span></div>`; hasChanges = true; } 
+                else if (last.hash !== info.hash) { 
+                    const diff = info.size - last.size; 
+                    // Add Diff Button for Modified Files
+                    html += `<div class="file-mod">[MOD] ${n} <span class="diff-size">(${diff>0?'+':''}${formatBytes(diff)})</span> <button class="btn-icon" onclick="viewDiff('${n}', '${last.hash}')" title="Compare Changes">⚖</button></div>`; 
+                    hasChanges = true; 
+                }
+            });
+            lastFiles.forEach((info, n) => { if (!curFiles.has(n)) { html += `<div class="file-del">[DEL] ${n} <span class="diff-size">(-${formatBytes(info.size)})</span></div>`; hasChanges = true; } });
+            el.changeLog.innerHTML = html || "No changes detected."; el.btnSnapshot.disabled = !hasChanges;
+        }
+
+        el.btnRefreshStatus.onclick = scanStatus;
+        
+        el.btnSnapshot.onclick = async () => {
+            if (!el.commitMsg.value || !el.userName.value) return alert("Name and Message required.");
+            
+            const latestOnDisk = await getLatestIdFromDisk();
+            const latestInMemory = db.history.length > 0 ? db.history[0].id : null;
+            if (latestInMemory !== latestOnDisk) {
+                alert("⚠️ COLLISION DETECTED. Please Scan for Changes to reload history.");
+                await loadMeta(); refreshUI(); await scanStatus(); return;
+            }
+
+            const snap = { id: crypto.randomUUID().substring(0,8), timestamp: new Date().toLocaleString('en-GB'), message: el.commitMsg.value, author: el.userName.value, files: [] };
+            for await (const entry of dirHandle.values()) {
+                if (entry.kind==='file' && !shouldIgnore(entry.name)) { const f = await entry.getFile(); const h = await getHash(f); await storeFile(f, h); snap.files.push({name: entry.name, hash: h, size: f.size}); }
+            }
+            db.history.unshift(snap);
+            await saveMeta(); el.commitMsg.value = ""; refreshUI(); await scanStatus();
+        };
+
+        async function getLatestIdFromDisk() {
+            try { const r = await dirHandle.getDirectoryHandle('.version_repo'); const f = await r.getFileHandle('metadata.json'); const t = await (await f.getFile()).text(); return JSON.parse(t).history?.[0]?.id || null; } catch { return null; }
+        }
+
+        el.btnGC.onclick = async () => {
+            if (!dirHandle || !confirm("Delete unused files from storage?")) return;
+            const used = new Set(); db.history.forEach(s => s.files.forEach(f => used.add(f.hash)));
+            const r = await dirHandle.getDirectoryHandle('.version_repo'); const o = await r.getDirectoryHandle('objects');
+            let c = 0; for await (const e of o.values()) if (!used.has(e.name)) { await o.removeEntry(e.name); c++; }
+            alert(`Cleaned ${c} files.`);
+        };
+
+        async function storeFile(file, hash) {
+            const r = await dirHandle.getDirectoryHandle('.version_repo'); const o = await r.getDirectoryHandle('objects', {create:true});
+            try { await o.getFileHandle(hash); } catch { const w = await (await o.getFileHandle(hash, {create:true})).createWritable(); await w.write(file); await w.close(); }
+        }
+
+        async function saveMeta() {
+            db.lastUser = el.userName.value; db.ignoreRules = el.ignoreInput.value;
+            const r = await dirHandle.getDirectoryHandle('.version_repo');
+            try { const backup = await r.getFileHandle('metadata_backup.json', {create:true}); const bw = await backup.createWritable(); await bw.write(JSON.stringify(db, null, 2)); await bw.close(); } catch(e) {}
+            const f = await r.getFileHandle('metadata.json', {create:true}); const w = await f.createWritable(); await w.write(JSON.stringify(db, null, 2)); await w.close();
+        }
+
+        function refreshUI() {
+            const term = el.searchInput ? el.searchInput.value.toLowerCase() : "";
+            const filtered = db.history.filter(s => (s.message+s.author).toLowerCase().includes(term) || s.files.some(f => f.name.toLowerCase().includes(term)));
+            el.historyBody.innerHTML = filtered.map(s => `
+                <tr class="snapshot-row" onclick="toggleDetails('${s.id}')">
+                    <td>${s.timestamp}</td><td>${s.author}</td><td><strong>${s.message}</strong></td>
+                    <td><button onclick="event.stopPropagation(); restoreFull('${s.id}')">Restore All</button><button class="btn-delete" onclick="event.stopPropagation(); deleteSnapshot('${s.id}')" title="Delete">🗑</button></td>
+                </tr>
+                <tr id="details-${s.id}" class="details-row"><td colspan="4"><div class="file-list">${s.files.map(f => `<div class="file-item"><span class="file-name">${f.name}</span><div><button class="btn-icon" onclick="viewFile('${f.hash}','${f.name}')">👁</button><button class="btn-icon" onclick="restoreSingle('${f.hash}','${f.name}')">↩</button></div></div>`).join('')}</div></td></tr>`).join('');
+        }
+
+        window.toggleDetails = id => { const r = document.getElementById(`details-${id}`); r.style.display = r.style.display === 'table-row' ? 'none' : 'table-row'; };
+        window.deleteSnapshot = async id => { if(confirm("Delete snapshot?")) { db.history = db.history.filter(x => x.id !== id); await saveMeta(); refreshUI(); } };
+        async function restoreFilesFromSnap(snap) { const r = await dirHandle.getDirectoryHandle('.version_repo'); const o = await r.getDirectoryHandle('objects'); for (const f of snap.files) { const src = await (await o.getFileHandle(f.hash)).getFile(); const dst = await (await dirHandle.getFileHandle(f.name, {create:true})).createWritable(); await dst.write(src); await dst.close(); } }
+        window.restoreFull = async id => { const s = db.history.find(x => x.id === id); if (confirm("Restore ALL files?")) { await restoreFilesFromSnap(s); alert("Restored."); await scanStatus(); } };
+        window.restoreSingle = async (h, n) => { if (confirm(`Restore "${n}"?`)) { const r = await dirHandle.getDirectoryHandle('.version_repo'); const src = await (await (await r.getDirectoryHandle('objects')).getFileHandle(h)).getFile(); const dst = await (await dirHandle.getFileHandle(n, {create:true})).createWritable(); await dst.write(src); await dst.close(); alert("Restored."); await scanStatus(); } };
+        
+        // --- VIEW FUNCTIONS ---
+        window.viewFile = async (h, n) => { 
+            el.modal.style.display="block"; el.modalCode.innerHTML="Loading..."; el.modalTitle.innerText=`Viewing: ${n}`;
+            try { const r=await dirHandle.getDirectoryHandle('.version_repo'); const f=await(await(await r.getDirectoryHandle('objects')).getFileHandle(h)).getFile(); el.modalCode.textContent=await f.text(); } catch { el.modalCode.innerText="Binary/Error"; } 
+        };
+
+        // --- VISUAL DIFF LOGIC ---
+        window.viewDiff = async (name, oldHash) => {
+            el.modal.style.display = "block"; el.modalCode.innerHTML = "Calculating diff..."; el.modalTitle.innerText = `Diff: ${name}`;
+            try {
+                // 1. Get Old Content
+                const r = await dirHandle.getDirectoryHandle('.version_repo');
+                const oldFile = await (await (await r.getDirectoryHandle('objects')).getFileHandle(oldHash)).getFile();
+                const oldText = await oldFile.text();
+                
+                // 2. Get New Content (Live from disk)
+                const newFileHandle = await dirHandle.getFileHandle(name);
+                const newFile = await newFileHandle.getFile();
+                const newText = await newFile.text();
+
+                // 3. Compute Diff
+                const diffHtml = simpleDiff(oldText, newText);
+                el.modalCode.innerHTML = diffHtml;
+            } catch (e) { el.modalCode.innerText = "Error: Cannot diff binary files or read error."; }
+        };
+
+        // Simple Line-by-Line Diff Algorithm
+        function simpleDiff(text1, text2) {
+            const lines1 = text1.split('\n');
+            const lines2 = text2.split('\n');
+            let i = 0, j = 0;
+            let html = "";
+            
+            // Very naive diff: just checking matching lines. 
+            // For a perfect diff we'd need a heavy library, but this is good for simple edits.
+            while (i < lines1.length || j < lines2.length) {
+                const l1 = lines1[i];
+                const l2 = lines2[j];
+                
+                if (l1 === l2) {
+                    html += `<div class="diff-nop">  ${escapeHtml(l1 || "")}</div>`;
+                    i++; j++;
+                } else {
+                    // Look ahead logic to handle simple insertions/deletions
+                    let foundMatch = false;
+                    // Check if l1 exists later in lines2 (Deletion)
+                    for (let k = 1; k < 5; k++) {
+                        if (j + k < lines2.length && lines1[i] === lines2[j + k]) {
+                            // lines2 has extra lines inserted before matching lines1
+                            for (let m = 0; m < k; m++) {
+                                html += `<div class="diff-add">+ ${escapeHtml(lines2[j + m])}</div>`;
+                            }
+                            j += k;
+                            foundMatch = true;
+                            break;
+                        }
+                        // Check if l2 exists later in lines1 (Insertion in l2, or Deletion in l1)
+                        if (i + k < lines1.length && lines2[j] === lines1[i + k]) {
+                             for (let m = 0; m < k; m++) {
+                                html += `<div class="diff-rem">- ${escapeHtml(lines1[i + m])}</div>`;
+                            }
+                            i += k;
+                            foundMatch = true;
+                            break;
+                        }
+                    }
+                    
+                    if (!foundMatch) {
+                        if (i < lines1.length) { html += `<div class="diff-rem">- ${escapeHtml(lines1[i])}</div>`; i++; }
+                        if (j < lines2.length) { html += `<div class="diff-add">+ ${escapeHtml(lines2[j])}</div>`; j++; }
+                    }
+                }
+            }
+            return html;
+        }
+
+        function escapeHtml(text) {
+            if (!text) return "";
+            return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+        }
+
+        el.closeModal.onclick = () => el.modal.style.display = "none"; window.onclick = e => { if (e.target == el.modal) el.modal.style.display = "none"; };
+    </script>
+</body>
+</html>
